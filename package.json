@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-sample-plugin",
+	"name": "obsidian-clean-icloud-sync",
 	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"description": "This is a plugin for Obsidian (https://obsidian.md). When using iCloud to sync Obsidian notes between multiple devices, sometimes iCloud is unable to resolve conflicts in multiple versions of a note. The intent of this plugin is to clean up the sync artifacts: automatically where possible, by providing help when the user needs to help, or at least to flag sync problems for the user.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
