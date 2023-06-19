@@ -1,4 +1,4 @@
-import { App, Modal, Plugin, Setting } from 'obsidian';
+import { App, Modal, Plugin, Setting, TFile } from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
@@ -34,19 +34,21 @@ export default class CleanICloudSyncPlugin extends Plugin {
 			const matches = regex.exec(file.path)
 			if (matches) {
 				console.log("Might have found sync conflict: " + matches[0])
-				const originalFile = matches[1] + matches[3]
-				console.log("originalFile = " + originalFile)
-				if (allFiles.filter(e => e.path === originalFile).length > 0) {
-					if (file.path === originalFile) {
+				const originalFilePath = matches[1] + matches[3]
+				console.log("originalFile = " + originalFilePath)
+				const originalFiles = allFiles.filter(e => e.path === originalFilePath)
+				if (originalFiles.length > 0) {
+					const originalFile = originalFiles[0]!
+					if (file.path === originalFile.path) {
 						console.log(file.path + " most likely represents original file for a sync conflict.");
 					} else {
 						console.log(file.path + " most likely represents a sync conflict.");
-						var conflict = new Conflict([], false);
-						if (conflicts.has(originalFile)) {
-							conflict = conflicts.get(originalFile)!;
+						var conflict = new Conflict(file, [], false);
+						if (conflicts.has(originalFilePath)) {
+							conflict = conflicts.get(originalFilePath)!;
 						}
-						conflict.conflictingFiles.push(file.path);
-						conflicts.set(originalFile, conflict);
+						conflict.conflictingFiles.push(file);
+						conflicts.set(originalFilePath, conflict);
 					}
 				} else {
 					console.log(file.path + " does not represent a sync conflict.");
@@ -65,10 +67,12 @@ export default class CleanICloudSyncPlugin extends Plugin {
 }
 
 class Conflict {
-	conflictingFiles:Array<string>;
-	selected:boolean;
+	originalFile: TFile;
+	conflictingFiles: Array<TFile>;
+	selected: boolean;
 
-	constructor(conflictingFiles: Array<string>, selected: boolean) {
+	constructor(originalFile: TFile, conflictingFiles: Array<TFile>, selected: boolean) {
+		this.originalFile = originalFile;
 		this.conflictingFiles = conflictingFiles;
 		this.selected = selected;
 	}
@@ -89,17 +93,16 @@ class SyncConflictModal extends Modal {
 
 		contentEl.createEl("p", { text: "Select which conflicts to clean." });
 
-		this.conflicts.forEach((value, key) => {
-			console.log("value: ", value +
-				", key: ", key);
+		this.conflicts.forEach((conflict, key) => {
+			console.log("key: ", key, "originalFile: ", conflict.originalFile, "conflictingFiles: ", conflict.conflictingFiles, "selected: ", conflict.selected );
 
 			new Setting(contentEl)
-			.setName(key)
-			.setDesc(value.conflictingFiles.join(", "))
+			.setName(conflict.originalFile.path)
+			.setDesc(conflict.conflictingFiles.map(({path}) => path).join(", "))
 			.addToggle((toggle) =>
 					toggle
 					.onChange(async (shouldClean) => {
-						
+						conflict.selected = true
 					})
 				);
 		})
@@ -117,12 +120,31 @@ class SyncConflictModal extends Modal {
 				.setCta()
 				.onClick(() => {
 					this.close();
-					//   clean!
+
+					// process user selections
+					this.conflicts.forEach((conflict, key) => {
+						console.log("BDB: original file: ", conflict.originalFile.path, "conflictingFiles: ", conflict.conflictingFiles, "selected: ", conflict.selected );
+						if (conflict.selected) {
+							// clean!
+							console.log("BDB: will clean: ", conflict.originalFile.path)
+							// if content of files is identical, use original and move the others to the trash
+							if (this.equalContent(conflict.originalFile, conflict.conflictingFiles)) {
+								// move conflict.conflictingFiles to the trash
+								conflict.conflictingFiles.forEach((file) => {
+									app.vault.delete(file);
+								})
+							}
+						}
+					});			
 				}));
 	}
 
 	onClose() {
 		const {contentEl} = this;
 		contentEl.empty();
+	}
+
+	equalContent(originalFile: TFile, conflictingFiles: Array<TFile>): boolean {
+		return false
 	}
 }
