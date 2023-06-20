@@ -62,7 +62,7 @@ export default class CleanICloudSyncPlugin extends Plugin {
 				", key: ", key)
 		})
 
-		new SyncConflictModal(this.app, conflicts).open();
+		new FindConflictsModal(this.app, conflicts).open();
 	}	
 }
 
@@ -78,7 +78,7 @@ class Conflict {
 	}
 }
 
-class SyncConflictModal extends Modal {
+class FindConflictsModal extends Modal {
 	conflicts: Map<string, Conflict>;
 
 	constructor(app: App, conflicts:Map<string, Conflict>) {
@@ -121,21 +121,8 @@ class SyncConflictModal extends Modal {
 				.onClick(() => {
 					this.close();
 
-					// process user selections
-					this.conflicts.forEach((conflict, key) => {
-						console.log("BDB: original file: ", conflict.originalFile.path, "conflictingFiles: ", conflict.conflictingFiles, "selected: ", conflict.selected );
-						if (conflict.selected) {
-							// clean!
-							console.log("BDB: will clean: ", conflict.originalFile.path)
-							// if content of files is identical, use original and move the others to the trash
-							if (this.equalContent(conflict.originalFile, conflict.conflictingFiles)) {
-								// move conflict.conflictingFiles to the trash
-								conflict.conflictingFiles.forEach((file) => {
-									app.vault.delete(file);
-								})
-							}
-						}
-					});			
+					// clean conflicts!
+					new CleanConflictsModal(this.app, this.conflicts).open();		
 				}));
 	}
 
@@ -143,8 +130,87 @@ class SyncConflictModal extends Modal {
 		const {contentEl} = this;
 		contentEl.empty();
 	}
+}
+
+class CleanConflictsModal extends Modal {
+	conflicts: Map<string, Conflict>;
+
+	constructor(app: App, conflicts:Map<string, Conflict>) {
+		super(app);
+		this.conflicts = conflicts;
+	}
+
+	onOpen() {
+		const {contentEl, titleEl} = this;
+
+		titleEl.setText('Cleaning iCloud Sync Conflicts');
+
+		this.conflicts.forEach((conflict, key) => {
+			console.log("key: ", key, "originalFile: ", conflict.originalFile, "conflictingFiles: ", conflict.conflictingFiles, "selected: ", conflict.selected );
+
+			if (conflict.selected) {
+				console.log("BDB: cleaning: ", conflict.originalFile.path);
+				contentEl.createEl("p", { text: "Cleaning " + conflict.originalFile.path + "..." });
+				this.cleanConflict(conflict);
+			} else {
+				contentEl.createEl("p", { text: "Skipping " + conflict.originalFile.path + "." });
+			}
+
+			// new Setting(contentEl)
+			// .setName(conflict.originalFile.path)
+			// .setDesc(conflict.conflictingFiles.map(({path}) => path).join(", "))
+			// .addToggle((toggle) =>
+			// 		toggle
+			// 		.onChange(async (shouldClean) => {
+			// 			conflict.selected = true
+			// 		})
+			// 	);
+		})
+
+		new Setting(contentEl)
+		// .addButton((btn) =>
+		//   	btn
+		// 		.setButtonText("Cancel")
+		// 		.onClick(() => {
+		// 			this.close();
+		// 		}))
+		.addButton((btn) =>
+		  	btn
+				.setButtonText("Done")
+				.setCta()
+				.onClick(() => {
+					this.close();		
+				}));
+	}
+
+	private cleanConflicts() {
+		// process user selections
+		this.conflicts.forEach((conflict, key) => {
+			console.log("BDB: original file: ", conflict.originalFile.path, "conflictingFiles: ", conflict.conflictingFiles, "selected: ", conflict.selected);
+				// clean!
+		});
+	}
+
+	private cleanConflict(conflict: Conflict) {
+		const {contentEl} = this;
+
+		// if content of files is identical, use original and move the others to the trash
+		if (this.equalContent(conflict.originalFile, conflict.conflictingFiles)) {
+			// move conflict.conflictingFiles to the trash
+			conflict.conflictingFiles.forEach((file) => {
+				console.log("BDB: deleting ", file.path);
+				contentEl.createEl("p", { text: "Deleting " + file.path + "..." });
+				app.vault.delete(file);
+			});
+		}
+	}
 
 	equalContent(originalFile: TFile, conflictingFiles: Array<TFile>): boolean {
 		return false
+	}
+
+	onClose() {
+		const {contentEl} = this;
+		contentEl.empty();
 	}
 }
