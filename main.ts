@@ -25,6 +25,7 @@ export default class CleanICloudSyncPlugin extends Plugin {
 
 	async findConflictsInMarkdownFiles() {
 		let allFiles = this.app.vault.getMarkdownFiles().sort((a, b) => a.name.localeCompare(b.name))
+		console.log("BDB: # of files = ", allFiles.length)
 		if (allFiles.length == 0) { return };
 
 		const regex = /^(.*)( [0-9]+)(\.md)$/
@@ -56,6 +57,8 @@ export default class CleanICloudSyncPlugin extends Plugin {
 				console.log(" ")
 			}
 		});
+
+		console.log("BDB: # of conflicts = ", conflicts.size)
 
 		conflicts.forEach((value, key) => {
 			console.log("value: ", value +
@@ -91,38 +94,46 @@ class FindConflictsModal extends Modal {
 
 		titleEl.setText('iCloud Sync Conflicts');
 
-		contentEl.createEl("p", { text: "Select which conflicts to clean." });
+		if (this.conflicts.size == 0) { 
+			contentEl.createEl("p", { text: "No conflicts found." });
+		} else {
+			contentEl.createEl("p", { text: "Select which conflicts to clean." });
 
-		this.conflicts.forEach((conflict, key) => {
-			console.log("key: ", key, "originalFile: ", conflict.originalFile, "conflictingFiles: ", conflict.conflictingFiles, "selected: ", conflict.selected );
+			this.conflicts.forEach((conflict, key) => {
+				console.log("key: ", key, "originalFile: ", conflict.originalFile, "conflictingFiles: ", conflict.conflictingFiles, "selected: ", conflict.selected );
 
-			new Setting(contentEl)
-			.setName(conflict.originalFile.path)
-			.setDesc(conflict.conflictingFiles.map(({path}) => path).join(", "))
-			.addToggle((toggle) =>
-					toggle
-					.onChange(async (shouldClean) => {
-						conflict.selected = true
-					})
-				);
-		})
+				new Setting(contentEl)
+				.setName(conflict.originalFile.path)
+				.setDesc(conflict.conflictingFiles.map(({path}) => path).join(", "))
+				.addToggle((toggle) =>
+						toggle
+						.onChange(async (shouldClean) => {
+							conflict.selected = true
+						})
+					);
+			})
+		}
 
-		new Setting(contentEl)
-		.addButton((btn) =>
+		var buttons = new Setting(contentEl);
+		if (this.conflicts.size > 0) { 
+			buttons.addButton((btn) =>
+				btn
+					.setButtonText("Cancel")
+					.onClick(() => {
+						this.close();
+					}))
+		}
+		buttons.addButton((btn) =>
 		  	btn
-				.setButtonText("Cancel")
-				.onClick(() => {
-					this.close();
-				}))
-		.addButton((btn) =>
-		  	btn
-				.setButtonText("Clean!")
+				.setButtonText((this.conflicts.size == 0) ? "Done" : "Clean!")
 				.setCta()
 				.onClick(() => {
 					this.close();
 
-					// clean conflicts!
-					new CleanConflictsModal(this.app, this.conflicts).open();		
+					if (this.conflicts.size > 0) {
+						// clean conflicts!
+						new CleanConflictsModal(this.app, this.conflicts).open();	
+					}	
 				}));
 	}
 
