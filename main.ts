@@ -8,17 +8,21 @@ const DEFAULT_SETTINGS: CleanICloudSyncSettings = {
 	debug: false
 }
 
-function debugLog(debug: boolean, message: string) {
+function debugLog(message: string) {
 	if (debug) {
 		console.log("BDB: " + message)
 	}
 }
+
+var debug : boolean = false;
 
 export default class CleanICloudSyncPlugin extends Plugin {
 	settings: CleanICloudSyncSettings;
 
 	async onload() {
 		await this.loadSettings()
+
+		debug = this.settings.debug;
 
 		// This adds a simple command that can be triggered from the palette
 		this.addCommand({
@@ -46,10 +50,8 @@ export default class CleanICloudSyncPlugin extends Plugin {
 	}
 
 	async findConflictsInMarkdownFiles() {
-		const debug = this.settings.debug;
-
 		let allFiles = this.app.vault.getMarkdownFiles().sort((a, b) => a.name.localeCompare(b.name))
-		debugLog(debug, "# of files = " + allFiles.length)
+		debugLog("# of files = " + allFiles.length)
 		if (allFiles.length == 0) { return };
 
 		const regex = /^(.*)( [0-9]+)(\.md)$/
@@ -58,16 +60,16 @@ export default class CleanICloudSyncPlugin extends Plugin {
 		allFiles.forEach(function (file, index) {
 			const matches = regex.exec(file.path)
 			if (matches) {
-				debugLog(debug, "Might have found sync conflict: " + matches[0])
+				debugLog("Might have found sync conflict: " + matches[0])
 				const originalFilePath = matches[1] + matches[3]
-				debugLog(debug, "originalFile = " + originalFilePath)
+				debugLog("originalFile = " + originalFilePath)
 				const originalFiles = allFiles.filter(e => e.path === originalFilePath)
 				if (originalFiles.length > 0) {
 					const originalFile = originalFiles[0]!
 					if (file.path === originalFile.path) {
-						debugLog(debug, file.path + " most likely represents original file for a sync conflict.");
+						debugLog(file.path + " most likely represents original file for a sync conflict.");
 					} else {
-						debugLog(debug, file.path + " most likely represents a sync conflict.");
+						debugLog(file.path + " most likely represents a sync conflict.");
 						var conflict = new Conflict(file, [], false);
 						if (conflicts.has(originalFilePath)) {
 							conflict = conflicts.get(originalFilePath)!;
@@ -76,16 +78,16 @@ export default class CleanICloudSyncPlugin extends Plugin {
 						conflicts.set(originalFilePath, conflict);
 					}
 				} else {
-					debugLog(debug, file.path + " does not represent a sync conflict.");
+					debugLog(file.path + " does not represent a sync conflict.");
 				}
-				debugLog(debug, " ")
+				debugLog(" ")
 			}
 		});
 
-		debugLog(debug, "# of conflicts = " + conflicts.size)
+		debugLog("# of conflicts = " + conflicts.size)
 
 		conflicts.forEach((value, key) => {
-			debugLog(debug, "value: " + value +
+			debugLog("value: " + value +
 				", key: " + key)
 		})
 
@@ -107,12 +109,10 @@ class Conflict {
 
 class FindConflictsModal extends Modal {
 	conflicts: Map<string, Conflict>;
-	debug: boolean;
 
-	constructor(app: App, conflicts: Map<string, Conflict>, debug: boolean) {
+	constructor(app: App, conflicts: Map<string, Conflict>) {
 		super(app);
 		this.conflicts = conflicts;
-		this.debug = debug;
 	}
 
 	onOpen() {
@@ -126,7 +126,7 @@ class FindConflictsModal extends Modal {
 			contentEl.createEl("p", { text: "Select which conflicts to clean." });
 
 			this.conflicts.forEach((conflict, key) => {
-				debugLog(this.debug, "key: " + key + "originalFile: " + conflict.originalFile + "conflictingFiles: " + conflict.conflictingFiles + "selected: " + conflict.selected );
+				debugLog("key: " + key + "originalFile: " + conflict.originalFile + "conflictingFiles: " + conflict.conflictingFiles + "selected: " + conflict.selected );
 
 				new Setting(contentEl)
 				.setName(conflict.originalFile.path)
@@ -158,7 +158,7 @@ class FindConflictsModal extends Modal {
 
 					if (this.conflicts.size > 0) {
 						// clean conflicts!
-						new CleanConflictsModal(this.app, this.conflicts, this.debug).open();	
+						new CleanConflictsModal(this.app, this.conflicts, debug).open();	
 					}	
 				}));
 	}
@@ -171,12 +171,10 @@ class FindConflictsModal extends Modal {
 
 class CleanConflictsModal extends Modal {
 	conflicts: Map<string, Conflict>;
-	debug: boolean;
 
-	constructor(app: App, conflicts:Map<string, Conflict>, debug: boolean) {
+	constructor(app: App, conflicts:Map<string, Conflict>) {
 		super(app);
 		this.conflicts = conflicts;
-		this.debug = debug;
 	}
 
 	onOpen() {
@@ -185,10 +183,10 @@ class CleanConflictsModal extends Modal {
 		titleEl.setText('Cleaning iCloud Sync Conflicts');
 
 		this.conflicts.forEach((conflict, key) => {
-			debugLog(this.debug, "key: " + key + "originalFile: " + conflict.originalFile + "conflictingFiles: " + conflict.conflictingFiles + "selected: " + conflict.selected );
+			debugLog("key: " + key + "originalFile: " + conflict.originalFile + "conflictingFiles: " + conflict.conflictingFiles + "selected: " + conflict.selected );
 
 			if (conflict.selected) {
-				debugLog(this.debug, "cleaning: " + conflict.originalFile.path);
+				debugLog("cleaning: " + conflict.originalFile.path);
 				contentEl.createEl("p", { text: "Cleaning " + conflict.originalFile.path + "..." });
 				this.cleanConflict(conflict);
 			} else {
@@ -225,7 +223,7 @@ class CleanConflictsModal extends Modal {
 	private cleanConflicts() {
 		// process user selections
 		this.conflicts.forEach((conflict, key) => {
-			debugLog(this.debug, "original file: " + conflict.originalFile.path + "conflictingFiles: " + conflict.conflictingFiles + "selected: " + conflict.selected);
+			debugLog("original file: " + conflict.originalFile.path + "conflictingFiles: " + conflict.conflictingFiles + "selected: " + conflict.selected);
 				// clean!
 		});
 	}
@@ -237,7 +235,7 @@ class CleanConflictsModal extends Modal {
 		if (this.equalContent(conflict.originalFile, conflict.conflictingFiles)) {
 			// move conflict.conflictingFiles to the trash
 			conflict.conflictingFiles.forEach((file) => {
-				debugLog(this.debug, "Deleting " + file.path);
+				debugLog("Deleting " + file.path);
 				contentEl.createEl("p", { text: "Deleting " + file.path + "..." });
 				app.vault.delete(file);
 			});
@@ -275,8 +273,9 @@ class CleanICloudSyncSettingTab extends PluginSettingTab {
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.debug)
-					.onChange(async (debug) => {
-						this.plugin.settings.debug = debug
+					.onChange(async (newDebug) => {
+						this.plugin.settings.debug = newDebug;
+						debug = newDebug;
 						await this.plugin.saveSettings();
 					})
 			);
